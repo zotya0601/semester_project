@@ -47,7 +47,7 @@ void i2c_reader(void *params){
 			i2c_master_write_read_device(I2C_MASTER_NUM, MPU6050_ADDRESS, &addr, 1, data + i, 1, TIMEOUT);	
 			addr++;
 		}
-		int16_t measurement[3] = {u8toi16(data[0], data[1]), u8toi16(data[2], data[3]), u8toi16(data[4], data[5])};
+		int16_t measurement[3] = (int16_t*)((void*)data);
 		for(int i = 0; i < 3; i++){ measurement[i] = measurement[i] / (8192 / 4); }
 		ESP_LOGI(I2C_TAG, "Acc X: %d", measurement[0] - 2);
 		ESP_LOGI(I2C_TAG, "Acc Y: %d", measurement[1] - 1);
