@@ -6,18 +6,10 @@
 #include "driver/i2c.h"
 #include "driver/gpio.h"
 
+#include "headers/sensor_i2c_comm_conf.h"
+
 static const char *TAG = "LABWORK_ESP";
 
-#define I2C_MASTER_SCL_IO           26      /*!< GPIO number used for I2C master clock */
-#define I2C_MASTER_SDA_IO           25      /*!< GPIO number used for I2C master data  */
-
-#define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
-#define I2C_MASTER_FREQ_HZ          400000                     /*!< I2C master clock frequency */
-#define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
-#define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
-#define I2C_MASTER_TIMEOUT_MS       1000
-
-#define MPU6050_ADDRESS 0b1101000
 static const uint8_t SAMPLE_RATE_DIVIDER_REG[2] = {0x25, 0};
 static const uint8_t FSYNC_DLPF_CONF_REF[2] = {0x26, 0b00001101};
 static const uint8_t GYRO_CONF_REG[2] = {0x27, 0b11101000};
@@ -43,14 +35,7 @@ void i2c_reader(void *params){
 	const char *I2C_TAG = "I2C Loop";
 	const TickType_t xDelay = ms_to_ticks(500);
 
-	{
-		uint8_t buf[1] = {0};
-		i2c_master_write_read_device(I2C_MASTER_NUM, MPU6050_ADDRESS, SAMPLE_RATE_DIVIDER_REG, 2, buf, 1, TIMEOUT);
-		i2c_master_write_read_device(I2C_MASTER_NUM, MPU6050_ADDRESS, FSYNC_DLPF_CONF_REF, 2, buf, 1, TIMEOUT);
-		i2c_master_write_read_device(I2C_MASTER_NUM, MPU6050_ADDRESS, GYRO_CONF_REG, 2, buf, 1, TIMEOUT);
-		i2c_master_write_read_device(I2C_MASTER_NUM, MPU6050_ADDRESS, PWR_MGMT_1_REG, 2, buf, 1, TIMEOUT);
-		i2c_master_write_read_device(I2C_MASTER_NUM, MPU6050_ADDRESS, ACC_CONFIG_REG, 2, buf, 1, TIMEOUT);
-	}
+	init_mpu6050();
 
 	ESP_LOGI(I2C_TAG, "Running i2c reader loop...");
 	while(true){
