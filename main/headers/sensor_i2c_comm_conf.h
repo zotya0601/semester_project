@@ -1,6 +1,8 @@
 #ifndef SENSOR_I2C_COMM_CONF__H
 #define SENSOR_I2C_COMM_CONF__H
 
+#include <stdint.h>
+
 #define I2C_MASTER_SCL_IO           26      /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO           25      /*!< GPIO number used for I2C master data  */
 
@@ -11,6 +13,9 @@
 #define I2C_MASTER_TIMEOUT_MS       1000
 
 #define MPU6050_ADDRESS 0b1101000
+
+#define TIMEOUT (I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS)
+
 
 void init_mpu6050();
 

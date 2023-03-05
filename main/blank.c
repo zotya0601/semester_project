@@ -10,14 +10,6 @@
 
 static const char *TAG = "LABWORK_ESP";
 
-static const uint8_t SAMPLE_RATE_DIVIDER_REG[2] = {0x25, 0};
-static const uint8_t FSYNC_DLPF_CONF_REF[2] = {0x26, 0b00001101};
-static const uint8_t GYRO_CONF_REG[2] = {0x27, 0b11101000};
-static const uint8_t PWR_MGMT_1_REG[2] = {0x6b, 0b00000001};
-static const uint8_t ACC_CONFIG_REG[2] = {0x1C, 0b11101000};
-
-#define TIMEOUT (I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS)
-
 
 static inline TickType_t ms_to_ticks(uint32_t ms){ return (ms/portTICK_PERIOD_MS); }
 
@@ -31,9 +23,17 @@ static uint16_t u8toi16(uint8_t msb, uint8_t lsb){
 	return res;
 }
 
+static inline uint8_t i2c_read_address(uint8_t address){
+	return (address << 1) | 0x01;
+}
+
+static inline uint8_t i2c_write_address(uint8_t address){
+	return (address << 1) & 0xfe;
+}
+
 void i2c_reader(void *params){
 	const char *I2C_TAG = "I2C Loop";
-	const TickType_t xDelay = ms_to_ticks(500);
+	const TickType_t xDelay = ms_to_ticks(50);
 
 	init_mpu6050();
 
@@ -47,7 +47,6 @@ void i2c_reader(void *params){
 			i2c_master_write_read_device(I2C_MASTER_NUM, MPU6050_ADDRESS, &addr, 1, data + i, 1, TIMEOUT);	
 			addr++;
 		}
-		
 		int16_t measurement[3] = {u8toi16(data[0], data[1]), u8toi16(data[2], data[3]), u8toi16(data[4], data[5])};
 		for(int i = 0; i < 3; i++){ measurement[i] = measurement[i] / (8192 / 4); }
 		ESP_LOGI(I2C_TAG, "Acc X: %d", measurement[0] - 2);
