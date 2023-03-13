@@ -7,29 +7,9 @@
 #include "driver/gpio.h"
 
 #include "headers/sensor_i2c_comm_conf.h"
+#include "headers/utils.h"
 
 static const char *TAG = "LABWORK_ESP";
-
-
-static inline TickType_t ms_to_ticks(uint32_t ms){ return (ms/portTICK_PERIOD_MS); }
-
-static uint16_t u8toi16(uint8_t msb, uint8_t lsb){
-	int16_t res = (int16_t)msb;
-	ESP_LOGW("Convert", "%d", res);
-	res <<= 8;
-	ESP_LOGW("Convert", "%d", res);
-	res |= (int16_t)lsb;
-	ESP_LOGW("Convert", "%d", res);
-	return res;
-}
-
-static inline uint8_t i2c_read_address(uint8_t address){
-	return (address << 1) | 0x01;
-}
-
-static inline uint8_t i2c_write_address(uint8_t address){
-	return (address << 1) & 0xfe;
-}
 
 void i2c_reader(void *params){
 	const char *I2C_TAG = "I2C Loop";
@@ -41,18 +21,14 @@ void i2c_reader(void *params){
 	while(true){
 		// https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Register-Map1.pdf
 		
-		uint8_t addr = 0x3b;
-		uint8_t data[6] = {0};
-		for(int i = 0; i < 6; i++){
-			i2c_master_write_read_device(I2C_MASTER_NUM, MPU6050_ADDRESS, &addr, 1, data + i, 1, TIMEOUT);	
-			addr++;
-		}
-		int16_t measurement[3] = (int16_t*)((void*)data);
-		for(int i = 0; i < 3; i++){ measurement[i] = measurement[i] / (8192 / 4); }
-		ESP_LOGI(I2C_TAG, "Acc X: %d", measurement[0] - 2);
-		ESP_LOGI(I2C_TAG, "Acc Y: %d", measurement[1] - 1);
-		ESP_LOGI(I2C_TAG, "Acc Z: %d", measurement[2] - 6);
+		float measurements_f[3] = {0};
+		read_acc_registers(measurements_f);
 
+		// for(int i = 0; i < 3; i++){ measurement[i] = get_g_from_measurement(measurement[i]); }
+		ESP_LOGI(I2C_TAG, "Acc X: %f", measurements_f[0]);
+		ESP_LOGI(I2C_TAG, "Acc Y: %f", measurements_f[1]);
+		ESP_LOGI(I2C_TAG, "Acc Z: %f", measurements_f[2]);
+		ESP_LOGI(I2C_TAG, "------------------------------");
 
 		vTaskDelay( xDelay );
 	}
