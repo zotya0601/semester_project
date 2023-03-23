@@ -3,14 +3,22 @@
 #include "esp_intr_alloc.h"
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
 
 #include "driver/i2c.h"
 #include "driver/gpio.h"
 
+#include "headers/mpu6050.h"
 #include "headers/sensor_i2c_comm_conf.h"
 #include "headers/utils.h"
 
 static const char *TAG = "LABWORK_ESP";
+
+#define GPIO_INT_IN (1ULL << GPIO_NUM_32)
+#define GPIO_INT_OUT (1ULL << GPIO_NUM_33)
+
+static SemaphoreHandle_t xSemaphore = NULL;
 
 void i2c_reader(void *params){
 	const char *I2C_TAG = "I2C Loop";
@@ -20,10 +28,8 @@ void i2c_reader(void *params){
 
 	ESP_LOGI(I2C_TAG, "Running i2c reader loop...");
 	while(true){
-		// https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Register-Map1.pdf
-		
 		float measurements_f[3] = {0};
-		read_acc_registers_calibrated(measurements_f);
+		read_acc_registers(measurements_f);
 
 		// for(int i = 0; i < 3; i++){ measurements_f[i] = g_to_acceleration(measurements_f[i]); }
 		ESP_LOGI(I2C_TAG, "Acc X: %f m/s^2", measurements_f[0]);
@@ -35,10 +41,33 @@ void i2c_reader(void *params){
 	}
 }
 
+static void IRAM_ATTR gpio_isr_handler(void* arg) {
+	uint32_t num = 0;
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
+}
+
+static void gpio_task_example(void *arg){
+	int level = 0;
+	for(;;){
+		if(xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE){
+			uint32_t num;
+			ESP_LOGW("gpio_task_example", "RUNNING");
+			if(level == 0)
+			{ 
+				level = 1; 
+			} else { 
+				level = 0; 
+			}
+			ESP_LOGW("gpio_task_example", "Level: %d", level);
+			gpio_set_level(GPIO_NUM_33, level);
+			// vTaskDelay(ms_to_ticks(200));
+		}
+	}
+}
+
 void app_main(void)
 {
-	est_err_t err = esp_intr_alloc()
-
 	i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
         .sda_io_num = I2C_MASTER_SDA_IO,
@@ -57,9 +86,44 @@ void app_main(void)
     ESP_LOGI(TAG, "I2C initialized successfully");
 
 	TaskHandle_t i2c_handle = 0;
-	static uint8_t ucParameterToPass;
+	static uint8_t ucParameterToPass = 0;
+	static uint8_t ucGPIOParameter = GPIO_NUM_32;
 
+	//zero-initialize the config structure.
+    gpio_config_t io_conf = {};
+    //disable interrupt
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    //set as output mode
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    //bit mask of the pins that you want to set,e.g.GPIO18/19
+    io_conf.pin_bit_mask = GPIO_INT_OUT;
+    //disable pull-down mode
+    io_conf.pull_down_en = 0;
+    //disable pull-up mode
+    io_conf.pull_up_en = 0;
+    //configure GPIO with the given settings	
+    gpio_config(&io_conf);
+
+    //interrupt of rising edge
+    io_conf.intr_type = GPIO_INTR_POSEDGE;
+    //bit mask of the pins, use GPIO4/5 here
+    io_conf.pin_bit_mask = GPIO_INT_IN;
+    //set as input mode
+    io_conf.mode = GPIO_MODE_INPUT;
+    //enable pull-up mode
+    io_conf.pull_up_en = 1;
+    gpio_config(&io_conf);
+
+	initialize_int_receiver(GPIO_NUM_32);
 	
+	xSemaphore = xSemaphoreCreateBinary();
 
-	xTaskCreate(i2c_reader, "Accelerometer loop", 10000, &ucParameterToPass, tskIDLE_PRIORITY, &i2c_handle);
+	ESP_LOGW("AAAAA", "3");
+	gpio_install_isr_service(0);
+	ESP_LOGW("AAAAA", "4");
+	ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_NUM_32, gpio_isr_handler, (void*)(&ucGPIOParameter)));
+	ESP_LOGW("AAAAA", "5");
+
+	xTaskCreate(i2c_reader, "Accelerometer loop", 10000, &ucParameterToPass, 10, &i2c_handle);
+	xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL);
 }
