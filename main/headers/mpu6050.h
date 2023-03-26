@@ -3,6 +3,7 @@
 
 #define SAMPLE_RATE_DIVIDER_REG             (0x19)
 #define SAMPLE_RATE_DIVIDER_NO_DIVIDER      (0x00)
+#define SAMPLE_RATE_DIVIDER_1KHZ            (7)
 
 #define FSYNC_DLPF_CONF_REG                 (0x1a)
 
@@ -45,8 +46,18 @@
 #define INT_PIN_CFG_1_REG                   (0x37)
 #define INT_PIN_CFG_2_REG                   (0x38)
 
+#define INT_PIN_CFG_1_INT_LEVEL_ACT_L       (0b10000000)
+#define INT_PIN_CFG_1_INT_OPEN_OD           (0b01000000)
+#define INT_PIN_CFG_1_HOLD_TIL_CLEAR        (0b00100000)
+#define INT_PIN_CFG_1_INT_RD_CLEAR_ANY_READ (0b00010000)
+
+
 #include "driver/gpio.h"
 
 void initialize_int_receiver(gpio_num_t gpio_pin);
+
+typedef struct _Measurements{
+    float x, y, z;
+} Measurements;
 
 #endif

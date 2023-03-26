@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "esp_err.h"
+#include "mpu6050.h"
 
 #define I2C_MASTER_SCL_IO           26      /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO           25      /*!< GPIO number used for I2C master data  */
@@ -19,6 +20,6 @@
 
 void init_mpu6050();
 esp_err_t read_acc_registers(float *res);
-esp_err_t read_acc_registers_calibrated(float *res);
+esp_err_t read_acc_registers_structured(Measurements *m);
 
 #endif

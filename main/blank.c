@@ -4,7 +4,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"
+#include "freertos/stream_buffer.h"
 
 #include "driver/i2c.h"
 #include "driver/gpio.h"
@@ -18,52 +18,64 @@ static const char *TAG = "LABWORK_ESP";
 #define GPIO_INT_IN (1ULL << GPIO_NUM_32)
 #define GPIO_INT_OUT (1ULL << GPIO_NUM_33)
 
-static SemaphoreHandle_t xSemaphore = NULL;
+static IRAM_ATTR SemaphoreHandle_t xInterruptSemaphore = NULL;
+static IRAM_ATTR SemaphoreHandle_t xQueueDataReadySemaphore = NULL;
+static StreamBufferHandle_t MeasurementsQueue = NULL;
 
+gpio_config_t led = {
+	.pin_bit_mask = (1ULL << GPIO_NUM_33),
+	.mode = GPIO_MODE_OUTPUT,
+	.pull_up_en = 0,
+	.pull_down_en = 0,
+	.intr_type = GPIO_INTR_DISABLE
+};
+
+void measurement_handler(void *params){
+	while(true){
+		if( xSemaphoreTake( xQueueDataReadySemaphore, portMAX_DELAY ) == pdTRUE ){
+			Measurements buffer[1024];
+			size_t rbytes = xStreamBufferReceive(MeasurementsQueue, buffer, 1024 * sizeof(Measurements), portMAX_DELAY);
+
+			// ESP_LOGI("measurement_handler", "FFT and stuff... \n\tBytes read: %d", rbytes);
+		}
+	}
+}
+
+static portMUX_TYPE i2c_spinlock = portMUX_INITIALIZER_UNLOCKED;
 void i2c_reader(void *params){
-	const char *I2C_TAG = "I2C Loop";
-	const TickType_t xDelay = ms_to_ticks(50);
+	const char *I2C_TAG = DRAM_STR("I2C Loop");
+	
+	static DRAM_ATTR int16_t queueLength = 0;
+	int LED_state = 0;
 
 	init_mpu6050();
 
 	ESP_LOGI(I2C_TAG, "Running i2c reader loop...");
+	
 	while(true){
-		float measurements_f[3] = {0};
-		read_acc_registers(measurements_f);
+		if( xSemaphoreTake( xInterruptSemaphore, portMAX_DELAY ) == pdTRUE) {
+			Measurements m;
+			read_acc_registers_structured(&m);
+			size_t wbytes = xStreamBufferSend(MeasurementsQueue, &m, sizeof(Measurements), portMAX_DELAY);
+			
+			if(wbytes != 0){
+				queueLength++;
+				if(queueLength == 1024){
+					xSemaphoreGive(xQueueDataReadySemaphore);
+					queueLength = 0;
 
-		// for(int i = 0; i < 3; i++){ measurements_f[i] = g_to_acceleration(measurements_f[i]); }
-		ESP_LOGI(I2C_TAG, "Acc X: %f m/s^2", measurements_f[0]);
-		ESP_LOGI(I2C_TAG, "Acc Y: %f m/s^2", measurements_f[1]);
-		ESP_LOGI(I2C_TAG, "Acc Z: %f m/s^2", measurements_f[2]);
-		ESP_LOGI(I2C_TAG, "------------------------------");
-
-		vTaskDelay( xDelay );
+					gpio_set_level(GPIO_NUM_33, LED_state);
+					LED_state = !LED_state;
+				}
+			}
+		}
 	}
 }
 
 static void IRAM_ATTR gpio_isr_handler(void* arg) {
-	uint32_t num = 0;
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
-}
-
-static void gpio_task_example(void *arg){
-	int level = 0;
-	for(;;){
-		if(xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE){
-			uint32_t num;
-			ESP_LOGW("gpio_task_example", "RUNNING");
-			if(level == 0)
-			{ 
-				level = 1; 
-			} else { 
-				level = 0; 
-			}
-			ESP_LOGW("gpio_task_example", "Level: %d", level);
-			gpio_set_level(GPIO_NUM_33, level);
-			// vTaskDelay(ms_to_ticks(200));
-		}
-	}
+	xSemaphoreGiveFromISR(xInterruptSemaphore, &xHigherPriorityTaskWoken);
+	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
 
 void app_main(void)
@@ -86,44 +98,30 @@ void app_main(void)
     ESP_LOGI(TAG, "I2C initialized successfully");
 
 	TaskHandle_t i2c_handle = 0;
+	TaskHandle_t fft_handle = 0;
 	static uint8_t ucParameterToPass = 0;
 	static uint8_t ucGPIOParameter = GPIO_NUM_32;
 
-	//zero-initialize the config structure.
-    gpio_config_t io_conf = {};
-    //disable interrupt
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    //set as output mode
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    //bit mask of the pins that you want to set,e.g.GPIO18/19
-    io_conf.pin_bit_mask = GPIO_INT_OUT;
-    //disable pull-down mode
-    io_conf.pull_down_en = 0;
-    //disable pull-up mode
-    io_conf.pull_up_en = 0;
-    //configure GPIO with the given settings	
-    gpio_config(&io_conf);
-
-    //interrupt of rising edge
-    io_conf.intr_type = GPIO_INTR_POSEDGE;
-    //bit mask of the pins, use GPIO4/5 here
-    io_conf.pin_bit_mask = GPIO_INT_IN;
-    //set as input mode
-    io_conf.mode = GPIO_MODE_INPUT;
-    //enable pull-up mode
-    io_conf.pull_up_en = 1;
-    gpio_config(&io_conf);
-
 	initialize_int_receiver(GPIO_NUM_32);
+	gpio_config(&led);
 	
-	xSemaphore = xSemaphoreCreateBinary();
+	xInterruptSemaphore = xSemaphoreCreateBinary();
+	xQueueDataReadySemaphore = xSemaphoreCreateBinary();
+	// MeasurementsQueue = xQueueCreate((UBaseType_t) 1024, (UBaseType_t)sizeof(Measurements));
+	MeasurementsQueue = xStreamBufferCreate(2048 * sizeof(Measurements), 1024 * sizeof(Measurements));
 
-	ESP_LOGW("AAAAA", "3");
-	gpio_install_isr_service(0);
-	ESP_LOGW("AAAAA", "4");
+	gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
 	ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_NUM_32, gpio_isr_handler, (void*)(&ucGPIOParameter)));
-	ESP_LOGW("AAAAA", "5");
 
-	xTaskCreate(i2c_reader, "Accelerometer loop", 10000, &ucParameterToPass, 10, &i2c_handle);
-	xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL);
+	BaseType_t taskc_res;
+	taskc_res = xTaskCreatePinnedToCore(i2c_reader, "Acc.meter loop", 10000, &ucParameterToPass, 20, &i2c_handle, 0);
+	if(taskc_res != pdPASS){
+		ESP_LOGE("main", "Could not start task Accelerometer loop");
+		return;
+	}
+	taskc_res = xTaskCreatePinnedToCore(measurement_handler, "FFT loop", 15000, &ucParameterToPass, 2, &fft_handle, 1);
+	if(taskc_res != pdPASS){
+		ESP_LOGE("main", "Could not start task FFT loop");
+		return;
+	}
 }
