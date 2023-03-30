@@ -1,0 +1,114 @@
+menu "Labwork Settings"
+
+    menu "Sensor I2C Settings"
+    
+        config I2C_MASTER_SCL_IO
+            int "SCL Pin"
+            default 26
+            help
+                SCL pin to provide sensor with clock
+        
+        config I2C_MASTER_SDA_IO
+            int "SDA pin"
+            default 25
+            help
+                SDA pin to communicate with the sensor
+
+        config SENSOR_INT_INPUT
+            int "Interrupt pin input"
+            default 32
+            help
+                "GPIO pin which is connected to the INT pin of the sensor"
+    
+    endmenu
+    
+    menu "MQTT Settings"
+    
+        config MQTT_URI
+            string "MQTT URI"
+            default ""
+            help
+                "URI of MQTT broker"
+
+        config MQTT_HOSTNAME
+            string "MQTT Hostname"
+            default ""
+            help
+                "Hostname of MQTT broker"
+
+        choice MQTT_TRANSPORT
+            prompt "Transport protocol used by MQTT"
+            default TRANSPORT_TCP
+            config TRANSPORT_TCP
+                bool "TCP"
+            config TRANSPORT_SSL
+                bool "SSL"
+            config TRANSPORT_WS
+                bool "WebSocket"
+            config TRANSPORT_WSS
+                bool "WebSocket Secure"
+        endchoice
+
+        config MQTT_PORT
+            int "Port of MQTT broker"
+            default 1883
+            help
+                "Port of MQTT broker"
+
+        config MQTT_TOPIC
+            string "MQTT Topic"
+            default "sensors/resonance"
+            help 
+                "The MQTT topic to which the ESP has to send the calculated MQTT data"
+    
+    endmenu
+
+    menu "WiFi Settings"
+        
+        config WIFI_SSID
+            string "WiFi SSID"
+            default ""
+            help
+                "SSID of the WiFi network the ESP32 should connect to"
+
+        config WIFI_PASSWORD
+            string "WiFi Password"
+            default ""
+            help 
+                "Password of the WiFi networt the ESP32 should connect to"
+
+        choice WIFI_SECURITY
+            prompt "WiFi Scan auth mode threshold"
+            default ESP_WIFI_AUTH_WPA2_PSK
+            help
+                The weakest authmode to accept in the scan mode.
+                This value defaults to ESP_WIFI_AUTH_WPA2_PSK incase password is present and ESP_WIFI_AUTH_OPEN is used.
+                Please select ESP_WIFI_AUTH_WEP/ESP_WIFI_AUTH_WPA_PSK incase AP is operating in WEP/WPA mode.
+    
+            config ESP_WIFI_AUTH_OPEN
+                bool "OPEN"
+            config ESP_WIFI_AUTH_WEP
+                bool "WEP"
+            config ESP_WIFI_AUTH_WPA_PSK
+                bool "WPA PSK"
+            config ESP_WIFI_AUTH_WPA2_PSK
+                bool "WPA2 PSK"
+            config ESP_WIFI_AUTH_WPA_WPA2_PSK
+                bool "WPA/WPA2 PSK"
+            config ESP_WIFI_AUTH_WPA3_PSK
+                bool "WPA3 PSK"
+            config ESP_WIFI_AUTH_WPA2_WPA3_PSK
+                bool "WPA2/WPA3 PSK"
+            config ESP_WIFI_AUTH_WAPI_PSK
+                bool "WAPI PSK"
+        endchoice
+           
+        config MAXIMUM_RETRY
+            int "Maximum retry"
+            default 10
+            help
+                "Number of maximum retries. Above this many tries, the ESP stops trying to connect to WiFi"
+
+    endmenu
+
+endmenu

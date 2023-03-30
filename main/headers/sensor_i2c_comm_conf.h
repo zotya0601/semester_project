@@ -5,8 +5,8 @@
 #include "esp_err.h"
 #include "mpu6050.h"
 
-#define I2C_MASTER_SCL_IO           26      /*!< GPIO number used for I2C master clock */
-#define I2C_MASTER_SDA_IO           25      /*!< GPIO number used for I2C master data  */
+#define I2C_MASTER_SCL_IO           CONFIG_I2C_MASTER_SCL_IO      /*!< GPIO number used for I2C master clock */
+#define I2C_MASTER_SDA_IO           CONFIG_I2C_MASTER_SDA_IO      /*!< GPIO number used for I2C master data  */
 
 #define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 #define I2C_MASTER_FREQ_HZ          400000                     /*!< I2C master clock frequency */
