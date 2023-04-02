@@ -1,2 +1,101 @@
 #include "headers/microphone.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "esp_adc/adc_continuous.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+
+#define _EXAMPLE_ADC_UNIT_STR(unit)         #unit
+#define EXAMPLE_ADC_UNIT_STR(unit)          _EXAMPLE_ADC_UNIT_STR(unit)
+
+#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S2
+    #define EXAMPLE_ADC_OUTPUT_TYPE             ADC_DIGI_OUTPUT_FORMAT_TYPE1
+    #define EXAMPLE_ADC_GET_CHANNEL(p_data)     ((p_data)->type1.channel)
+    #define EXAMPLE_ADC_GET_DATA(p_data)        ((p_data)->type1.data)
+#endif
+
+static TaskHandle_t task_handle = NULL;
+static adc_continuous_handle_t adc_handle = NULL;
+
+static void IRAM_ATTR handler(void *params){
+    static const char *TAG = "ADC Handler method";
+    uint32_t ret_num = 0;
+    uint8_t result[ADC_READ_LEN] = {0};
+
+    while(1){
+        ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+        char unit[] = EXAMPLE_ADC_UNIT_STR(EXAMPLE_ADC_UNIT);
+
+        while(1){
+            esp_err_t ret = adc_continuous_read(adc_handle, result, ADC_READ_LEN, &ret_num, 0);
+            if(ret == ESP_OK){
+                ESP_LOGI("TASK", "ret is %x, ret_num is %"PRIu32, ret, ret_num);
+                for (int i = 0; i < ret_num; i += SOC_ADC_DIGI_RESULT_BYTES) {
+                    adc_digi_output_data_t *p = (void*)&result[i];
+                    uint32_t chan_num = EXAMPLE_ADC_GET_CHANNEL(p);
+                    uint32_t data = EXAMPLE_ADC_GET_DATA(p);
+                    /* Check the channel number validation, the data is invalid if the channel num exceed the maximum channel */
+                    if (chan_num < SOC_ADC_CHANNEL_NUM(ADC_UNIT)) {
+                        ESP_LOGI(TAG, "Unit: %s, Channel: %"PRIu32", Value: %"PRIx32, unit, chan_num, data);
+                    } else {
+                        ESP_LOGW(TAG, "Invalid data [%s_%"PRIu32"_%"PRIx32"]", unit, chan_num, data);
+                    }
+                }
+            } else if (ret == ESP_ERR_TIMEOUT) {
+                //We try to read `EXAMPLE_READ_LEN` until API returns timeout, which means there's no available data
+                break;
+            }
+        }
+    }
+}
+
+static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_continuous_evt_data_t *edata, void *user_data)
+{
+    BaseType_t mustYield = pdFALSE;
+    //Notify that ADC continuous driver has done enough number of conversions
+    vTaskNotifyGiveFromISR(task_handle, &mustYield);
+
+    return (mustYield == pdTRUE);
+}
+
+esp_err_t init_adc(){
+    esp_err_t err = ESP_OK;
+    adc_continuous_handle_t handle = NULL;
+    adc_continuous_handle_cfg_t adc_config = {
+        .max_store_buf_size = ADC_BUFFER_SIZE,
+        .conv_frame_size = ADC_READ_LEN,
+    };
+
+    ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &handle));
+
+    adc_continuous_config_t dig_cfg = {
+        .sample_freq_hz = SAMPLE_RATE,
+        .conv_mode = ADC_CONV_SINGLE_UNIT_1,
+        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
+        .pattern_num = 1,
+    };
+
+    adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX] = {0};
+    adc_pattern[0].atten = ADC_ATTEN_DB_0;
+    adc_pattern[0].channel = MICROPHONE_GPIO;
+    adc_pattern[0].unit = ADC_UNIT;
+    adc_pattern[0].bit_width = ADC_BITWIDTH_12;
+
+    dig_cfg.adc_pattern = adc_pattern;
+    ESP_ERROR_CHECK(adc_continuous_config(handle, &dig_cfg));
+
+    adc_handle = handle;
+
+    adc_continuous_evt_cbs_t cbs = {
+        .on_conv_done = s_conv_done_cb,
+    };
+    ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
+
+    xTaskCreatePinnedToCore(handler, "ADC loop", 10000, NULL, 2, &task_handle, tskNO_AFFINITY);
+    
+    ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
+
+    return err;
+}

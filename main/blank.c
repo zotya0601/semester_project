@@ -22,6 +22,7 @@
 #include "headers/utils.h"
 #include "headers/mqtt.h"
 #include "headers/wifi.h"
+#include "headers/microphone.h"
 
 static const char *TAG = "LABWORK_ESP";
 
@@ -90,10 +91,10 @@ void measurement_handler(void *params){
 				res[i + 1] = 10 * log10f((y[i * 2 + 0] * y[i * 2 + 0] + y[i * 2 + 1] * y[i * 2 + 1])/READINGS);
 				res[i + 2] = 10 * log10f((z[i * 2 + 0] * z[i * 2 + 0] + z[i * 2 + 1] * z[i * 2 + 1])/READINGS);
 
-				y[i] = 10 * log10f((y[i * 2 + 0] * y[i * 2 + 0] + y[i * 2 + 1] * y[i * 2 + 1])/READINGS);
+				// y[i] = 10 * log10f((y[i * 2 + 0] * y[i * 2 + 0] + y[i * 2 + 1] * y[i * 2 + 1])/READINGS);
 			}
 
-			dsps_view_spectrum(y, READINGS / 2, -1000, 1000);
+			// dsps_view_spectrum(y, READINGS / 2, -1000, 1000);
 			mqtt_publish((uint8_t*)res, (READINGS / 2) * 3);
 		}
 		dsps_fft2r_deinit_fc32();
@@ -197,6 +198,7 @@ void app_main(void)
 	mqtt_register_event_handler(mqtt_event_handler);
 	mqtt_start();
 
+	init_adc();
 
 	BaseType_t taskc_res;
 	taskc_res = xTaskCreatePinnedToCore(i2c_reader, "Acc.meter loop", 10000, &ucParameterToPass, 20, &i2c_handle, 1);

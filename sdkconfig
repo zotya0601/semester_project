@@ -355,6 +355,9 @@ CONFIG_ADC1_GPIO_33=y
 # CONFIG_ADC1_GPIO_35 is not set
 # CONFIG_ADC1_GPIO_36 is not set
 # CONFIG_ADC1_GPIO_39 is not set
+CONFIG_READ_LEN=256
+CONFIG_ADC_BUFFER_SIZE=1024
+CONFIG_SAMPLE_RATE=20000
 # end of Microphone
 # end of Labwork Settings
 
