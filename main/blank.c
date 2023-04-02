@@ -25,15 +25,12 @@
 
 static const char *TAG = "LABWORK_ESP";
 
-#define GPIO_INT_IN (1ULL << CONFIG_SENSOR_INT_INPUT)
-#define GPIO_INT_OUT (1ULL << GPIO_NUM_33)
-
 static IRAM_ATTR SemaphoreHandle_t xInterruptSemaphore = NULL;
 static IRAM_ATTR SemaphoreHandle_t xQueueDataReadySemaphore = NULL;
 static StreamBufferHandle_t MeasurementsQueue = NULL;
 
 gpio_config_t led = {
-	.pin_bit_mask = (1ULL << GPIO_NUM_33),
+	.pin_bit_mask = (1ULL << GPIO_NUM_25),
 	.mode = GPIO_MODE_OUTPUT,
 	.pull_up_en = 0,
 	.pull_down_en = 0,
@@ -43,6 +40,9 @@ gpio_config_t led = {
 #define READINGS 1024	// float -> 4096 byte
 
 static volatile uint64_t start_time = 0;
+
+static TaskHandle_t i2c_handle = 0;
+static TaskHandle_t fft_handle = 0;
 
 
 // 80kByte Stack (elféraz, jolesz)
@@ -62,9 +62,10 @@ void measurement_handler(void *params){
 		float wind[READINGS * 2] = {0};	// 8192 byte
 		dsps_wind_hann_f32(wind, READINGS);
 		
-		if( xSemaphoreTake( xQueueDataReadySemaphore, portMAX_DELAY ) == pdTRUE ){
+		// if( xSemaphoreTake( xQueueDataReadySemaphore, portMAX_DELAY ) == pdTRUE ){
+		if( ulTaskNotifyTake( pdTRUE, portMAX_DELAY ) ){
 			Measurements buffer[1024];	// 4096 byte
-			size_t rbytes = xStreamBufferReceive(MeasurementsQueue, buffer, 1024 * sizeof(Measurements), portMAX_DELAY);
+			xStreamBufferReceive(MeasurementsQueue, buffer, 1024 * sizeof(Measurements), portMAX_DELAY);
 
 			for(int i = 0; i < READINGS; i++){
 				x[i*2] = buffer[i].x;
@@ -93,80 +94,21 @@ void measurement_handler(void *params){
 			}
 
 			dsps_view_spectrum(y, READINGS / 2, -1000, 1000);
-			mqtt_publish(res, (READINGS / 2) * 3);
+			mqtt_publish((uint8_t*)res, (READINGS / 2) * 3);
 		}
 		dsps_fft2r_deinit_fc32();
 	}
 }
 
-
-void i2c_reader(void *params){
-	const char *I2C_TAG = DRAM_STR("I2C Loop");
-	
-	static DRAM_ATTR int16_t queueLength = 0;
-	int LED_state = 0;
-
-	init_mpu6050();
-
-	ESP_LOGI(I2C_TAG, "Running i2c reader loop...");
-	
-	start_time = esp_timer_get_time();
-	while(true){
-		if( xSemaphoreTake( xInterruptSemaphore, portMAX_DELAY ) == pdTRUE) {
-			Measurements m;
-			read_acc_registers_structured(&m);
-			size_t wbytes = xStreamBufferSend(MeasurementsQueue, &m, sizeof(Measurements), portMAX_DELAY);
-			
-			if(wbytes != 0){
-				queueLength++;
-				if(queueLength == 1024){
-					uint64_t stop_time = esp_timer_get_time();
-					xSemaphoreGive(xQueueDataReadySemaphore);
-					float period_time = ((float)(stop_time - start_time)) * 1000000.0f;	// Time it takes to read 1024 samples
-					float sample_rate = ((float)queueLength) / 1.0f / period_time;
-					queueLength = 0;
-					ESP_LOGI(I2C_TAG, "Sample time was: %f Hz", sample_rate);
-					gpio_set_level(GPIO_NUM_33, LED_state);
-					LED_state = !LED_state;
-
-					start_time = stop_time;
-				}
-			}
-			else {
-				ESP_LOGW(I2C_TAG, "StreamBuffer length exceeded!");
-			}
-		}
-	}
-}
-
 static void IRAM_ATTR gpio_isr_handler(void* arg) {
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	xSemaphoreGiveFromISR(xInterruptSemaphore, &xHigherPriorityTaskWoken);
+	vTaskNotifyGiveFromISR(i2c_handle, &xHigherPriorityTaskWoken);
+	// xSemaphoreGiveFromISR(xInterruptSemaphore, &xHigherPriorityTaskWoken);
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );	
 }
 
-void app_main(void)
-{
-	esp_log_level_set("*", ESP_LOG_INFO);
-    esp_log_level_set("mqtt_client", ESP_LOG_VERBOSE);
-    esp_log_level_set("MQTT_EXAMPLE", ESP_LOG_VERBOSE);
-    esp_log_level_set("TRANSPORT_BASE", ESP_LOG_VERBOSE);
-    esp_log_level_set("esp-tls", ESP_LOG_VERBOSE);
-    esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
-    esp_log_level_set("outbox", ESP_LOG_VERBOSE);
-
-	ESP_ERROR_CHECK(nvs_flash_init());
-	ESP_ERROR_CHECK(esp_netif_init());
-	ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-	init_wifi(CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD);
-	wifi_start();
-
-	vTaskDelay(ms_to_ticks(2000));
-
-	init_mqtt(CONFIG_MQTT_URI, CONFIG_MQTT_TOPIC);
-	mqtt_register_event_handler(mqtt_event_handler);
-	mqtt_start();
+void i2c_reader(void *params){
+	const char *I2C_TAG = DRAM_STR("I2C Loop");
 
 	i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
@@ -185,21 +127,76 @@ void app_main(void)
 
     ESP_LOGI(TAG, "I2C initialized successfully");
 
-	TaskHandle_t i2c_handle = 0;
-	TaskHandle_t fft_handle = 0;
-	static uint8_t ucParameterToPass = 0;
-	static uint8_t ucGPIOParameter = GPIO_NUM_32;
+	static DRAM_ATTR int16_t queueLength = 0;
+	int LED_state = 0;
 
-	initialize_int_receiver(GPIO_NUM_32);
+	init_mpu6050();
+	initialize_int_receiver(I2C_INT_PIN);
+
+	static uint8_t ucGPIOParameter = I2C_INT_PIN;
+	gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+	ESP_ERROR_CHECK(gpio_isr_handler_add(I2C_INT_PIN, gpio_isr_handler, (void*)(&ucGPIOParameter)));
+
+	ESP_LOGI(I2C_TAG, "Running i2c reader loop...");
+	
+	start_time = esp_timer_get_time();
+	while(true){
+		// if( xSemaphoreTake( xInterruptSemaphore, portMAX_DELAY ) == pdTRUE) {
+		if( ulTaskNotifyTake( pdTRUE, portMAX_DELAY ) ) {
+			Measurements m;
+			read_acc_registers_structured(&m);
+			size_t wbytes = xStreamBufferSend(MeasurementsQueue, &m, sizeof(Measurements), portMAX_DELAY);
+			
+			if(wbytes != 0){
+				queueLength++;
+				if(queueLength == 1024){
+					uint64_t stop_time = esp_timer_get_time();
+					xTaskNotifyGive( fft_handle );
+					// xSemaphoreGive(xQueueDataReadySemaphore);
+					float period_time = ((float)(stop_time - start_time)) * 1000000.0f;	// Time it takes to read 1024 samples
+					float sample_rate = ((float)queueLength) / 1.0f / period_time;
+					queueLength = 0;
+					ESP_LOGI(I2C_TAG, "Sample time was: %f Hz", sample_rate);
+					gpio_set_level(GPIO_NUM_25, LED_state);
+					LED_state = !LED_state;
+
+					start_time = stop_time;
+				}
+			}
+			else {
+				ESP_LOGW(I2C_TAG, "StreamBuffer length exceeded!");
+			}
+		}
+	}
+}
+
+void app_main(void)
+{
+	esp_log_level_set("*", ESP_LOG_INFO);
+    esp_log_level_set("mqtt_client", ESP_LOG_VERBOSE);
+    esp_log_level_set("MQTT_EXAMPLE", ESP_LOG_VERBOSE);
+    esp_log_level_set("TRANSPORT_BASE", ESP_LOG_VERBOSE);
+    esp_log_level_set("esp-tls", ESP_LOG_VERBOSE);
+    esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
+    esp_log_level_set("outbox", ESP_LOG_VERBOSE);
+
+	ESP_ERROR_CHECK(nvs_flash_init());
+	ESP_ERROR_CHECK(esp_netif_init());
+	ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+	static uint8_t ucParameterToPass = 0;
+
 	gpio_config(&led);
 	
-	xInterruptSemaphore = xSemaphoreCreateBinary();
-	xQueueDataReadySemaphore = xSemaphoreCreateBinary();
-	// MeasurementsQueue = xQueueCreate((UBaseType_t) 1024, (UBaseType_t)sizeof(Measurements));
 	MeasurementsQueue = xStreamBufferCreate(2048 * sizeof(Measurements), 1024 * sizeof(Measurements));
 
-	gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
-	ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_NUM_32, gpio_isr_handler, (void*)(&ucGPIOParameter)));
+	ESP_ERROR_CHECK(init_wifi(CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD));
+	wifi_start();
+
+	init_mqtt(CONFIG_MQTT_URI, CONFIG_MQTT_TOPIC);
+	mqtt_register_event_handler(mqtt_event_handler);
+	mqtt_start();
+
 
 	BaseType_t taskc_res;
 	taskc_res = xTaskCreatePinnedToCore(i2c_reader, "Acc.meter loop", 10000, &ucParameterToPass, 20, &i2c_handle, 1);
@@ -207,7 +204,8 @@ void app_main(void)
 		ESP_LOGE("main", "Could not start task Accelerometer loop");
 		return;
 	}
-	taskc_res = xTaskCreatePinnedToCore(measurement_handler, "FFT loop", 80000, &ucParameterToPass, 2, &fft_handle, 0);
+
+	taskc_res = xTaskCreatePinnedToCore(measurement_handler, "FFT loop", 80000, &ucParameterToPass, 2, &fft_handle, tskNO_AFFINITY);
 	if(taskc_res != pdPASS){
 		ESP_LOGE("main", "Could not start task FFT loop");
 		return;

@@ -111,4 +111,25 @@ menu "Labwork Settings"
 
     endmenu
 
+    menu Microphone
+        choice MICROPHONE_GPIO
+            prompt "ADC Pin"
+            default ADC1_GPIO_33
+            help
+                "GPIO Pin used by Microphone to do Analog-Digital conversion. Only can be from ADC1 pins"
+            config ADC1_GPIO_32
+                bool "GPIO 32 (Chan. 4)"
+            config ADC1_GPIO_33
+                bool "GPIO 33 (Chan. 5)"
+            config ADC1_GPIO_34
+                bool "GPIO 34 (Chan. 6)"
+            config ADC1_GPIO_35
+                bool "GPIO 35 (Chan. 7)"
+            config ADC1_GPIO_36
+                bool "GPIO 36 (Chan. 0)"
+            config ADC1_GPIO_39
+                bool "GPIO 39 (Chan. 3)"
+        endchoice
+    endmenu
+
 endmenu

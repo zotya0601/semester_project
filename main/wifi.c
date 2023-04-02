@@ -3,7 +3,7 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
-static EventGroupHandle_t s_wifi_event_group;
+static volatile EventGroupHandle_t s_wifi_event_group;
 static const char *TAG = "wifi station";
 
 static int s_retry_num = 0;
@@ -35,7 +35,8 @@ esp_err_t init_wifi(const char *ssid, const char *passw){
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    esp_event_handler_instance_t instance_any_id, instance_got_ip;
+    esp_event_handler_instance_t instance_any_id;
+    esp_event_handler_instance_t instance_got_ip;
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &instance_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL, &instance_got_ip));
@@ -61,8 +62,11 @@ esp_err_t init_wifi(const char *ssid, const char *passw){
 }
 
 esp_err_t wifi_start(){
-    return esp_wifi_start();
+    ESP_LOGI("WIFI", "Starting wifi...");
+    esp_err_t err = ESP_OK;
 
+    esp_wifi_start();
+    
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
             WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
             pdFALSE,
@@ -77,7 +81,11 @@ esp_err_t wifi_start(){
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
                  CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD);
+        err = ESP_FAIL;
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
+        err = ESP_FAIL;
     }
+
+    return err;
 }

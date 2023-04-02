@@ -6,7 +6,7 @@
 #include "esp_log.h"
 
 static esp_mqtt_client_handle_t mqtt_client = NULL;
-static char *mqtt_topic = NULL;
+static const char *mqtt_topic = NULL;
 
 static const char *TAG = "MQTT_EXAMPLE";
 
@@ -82,11 +82,12 @@ void init_mqtt(const char *uri, const char *topic){
     };
     mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
     mqtt_topic = topic;
+    ESP_LOGI("MQTT", "MQTT topic is: %s", mqtt_topic);
 }
 
-esp_err_t mqtt_register_event_handler(esp_event_handler_t mqtt_event_handler){
+esp_err_t mqtt_register_event_handler(esp_event_handler_t event_handler){
     if(mqtt_client == NULL) return ESP_ERR_INVALID_STATE;
-    return esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, mqtt_client);
+    return esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID, event_handler, mqtt_client);
 }
 
 esp_err_t mqtt_start(){
