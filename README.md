@@ -41,3 +41,16 @@ static void IRAM_ATTR gpio_isr_handler(void* arg) {
 ```
 
 Mivel az interrupt minden fölött áll, így bármilyen prioritású taskot megállít. `xSemaphoreGiveFromISR()` függvény aktiválja a Binary Semaphore-t, melynek jelére az I2C kommunikációért felelős task vár. Ez a függvény meg tudja mondani azt, hogy a Semaphore beállításával Blocked állapotból Ready állapotba került-e egy olyan task, melynek prioritása nagyobb, mint az ISR által megszakított, éppen futó (Running állapotban lévő) task prioritása. Amennyiben igen, az ütemező a magasabb prioritású taskot fogja futtatni, *de csak abban az esetben*, amennyiben ezt a `portYIELD_FROM_ISR()` makrófüggvénnyel megmondjuk. Enélkül, a FreeRTOS ütemező folytatja a megszakított task futását addig, amíg a számára kiosztott Time Slice le nem telik. Hogyha épp a Fourier transzformációt végző task került megszakításra, az folytatódik, és kommunikáció nem történik. A megadott függvény hívásával, mivel az I2C kommunikációt adó függvény magasabb prioritású, az ütemező azt indítja el.
+
+### Analóg mikrofon
+
+Analóg mikrofont (is) kaptam. 3,3V-ról táplálom, a kimeneti OUT lábán (Vdd/2), azaz olyan 1,65V jön ki teljes csend esetén
+Az ESP32 ADC-jének referencia feszültsége (Vref) olyan 1-1,2V között van, kalibrációtól függően
+
+Egész idáig `ADC_ATTEN_DB_0` beállítással mértem, `100 mV ~ 950 mV` között, ami hát... Már a 1,65V is jóval nagyobb ennél
+`ADC_ATTEN_DB_11` beállítás segített egész jól, `150 mV ~ 2450 mV` az intervallum így, de hát ez sem a legjobb, *de* legalább rájöttem, hogy mi is jön vissza a mikrofonból: A teljes hullám. (Vdd/2) fölött a pozitív, az alatt meg a negatív fele
+
+### FFT függvény absztrahálása
+
+Az FFT függvénynek szüksége van az adathalmazra (melyben a transzformálandó értékek vannak), valamint e tömbnek a hossza. 
+

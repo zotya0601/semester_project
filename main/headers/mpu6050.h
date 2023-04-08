@@ -53,11 +53,12 @@
 
 
 #include "driver/gpio.h"
+#include "headers/utils.h"
 
 void initialize_int_receiver(gpio_num_t gpio_pin);
 
 typedef struct _Measurements{
-    float x, y, z;
+    Complex x, y, z;
 } Measurements;
 
 #endif

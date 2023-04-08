@@ -25,6 +25,9 @@ esp_err_t mqtt_start();
 esp_err_t mqtt_publish(uint8_t *data, int len);
 esp_err_t mqtt_publish_qos(uint8_t *data, int len, int qos);
 
+esp_err_t mqtt_publish_topic(uint8_t *data, int len, const char *topic);
+esp_err_t mqtt_publish_qos_topic(uint8_t *data, int len, int qos, const char *topic);
+
 void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 
 #endif

@@ -1,11 +1,19 @@
 #include "headers/microphone.h"
+#include "headers/utils.h"
+#include "headers/fft.h"
+#include "headers/mqtt.h"
+
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_adc/adc_continuous.h"
 
+#include "esp_dsp.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+
+#include <string.h>
 
 #define _EXAMPLE_ADC_UNIT_STR(unit)         #unit
 #define EXAMPLE_ADC_UNIT_STR(unit)          _EXAMPLE_ADC_UNIT_STR(unit)
@@ -16,38 +24,62 @@
     #define EXAMPLE_ADC_GET_DATA(p_data)        ((p_data)->type1.data)
 #endif
 
+#define READINGS (ADC_READ_LEN / 2)
+
 static TaskHandle_t task_handle = NULL;
 static adc_continuous_handle_t adc_handle = NULL;
 
+static void fft_mqtt_callback(void *data, int len){
+    mqtt_publish(data, len * sizeof(Complex));
+    free(data);
+}
+
 static void IRAM_ATTR handler(void *params){
     static const char *TAG = "ADC Handler method";
-    uint32_t ret_num = 0;
-    uint8_t result[ADC_READ_LEN] = {0};
+    static uint32_t ret_num = 0;
+    static uint8_t result[ADC_READ_LEN] = {0};
+    memset(result, 0xcc, ADC_READ_LEN);
+
+    ESP_ERROR_CHECK(dsps_fft2r_init_fc32(NULL, READINGS));
+    
 
     while(1){
         ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
         char unit[] = EXAMPLE_ADC_UNIT_STR(EXAMPLE_ADC_UNIT);
 
-        while(1){
+        ESP_LOGI(TAG, "Hanling ADC data");  
             esp_err_t ret = adc_continuous_read(adc_handle, result, ADC_READ_LEN, &ret_num, 0);
             if(ret == ESP_OK){
                 ESP_LOGI("TASK", "ret is %x, ret_num is %"PRIu32, ret, ret_num);
+                // Fourier
+
                 for (int i = 0; i < ret_num; i += SOC_ADC_DIGI_RESULT_BYTES) {
                     adc_digi_output_data_t *p = (void*)&result[i];
                     uint32_t chan_num = EXAMPLE_ADC_GET_CHANNEL(p);
                     uint32_t data = EXAMPLE_ADC_GET_DATA(p);
                     /* Check the channel number validation, the data is invalid if the channel num exceed the maximum channel */
                     if (chan_num < SOC_ADC_CHANNEL_NUM(ADC_UNIT)) {
-                        ESP_LOGI(TAG, "Unit: %s, Channel: %"PRIu32", Value: %"PRIx32, unit, chan_num, data);
+                        ESP_LOGI(TAG, "Unit: %s, Channel: %"PRIu32", Value: %"PRIx32, unit, chan_num, (data & 0x0fff));
                     } else {
                         ESP_LOGW(TAG, "Invalid data [%s_%"PRIu32"_%"PRIx32"]", unit, chan_num, data);
                     }
                 }
-            } else if (ret == ESP_ERR_TIMEOUT) {
-                //We try to read `EXAMPLE_READ_LEN` until API returns timeout, which means there's no available data
-                break;
+                ESP_LOGI(TAG, "Measurements done");
+
+                uint8_t *job_buf = (uint8_t*)malloc(ADC_READ_LEN);
+                memcpy(job_buf, result, ADC_READ_LEN);
+
+                FFTJob job = {
+                    .nBuffers = 1,
+                    .buffer_len = ret_num,
+                    .buffers = job_buf,
+                    .callback = fft_mqtt_callback
+                };
+                fft_add_job_to_queue(job);
+                
+            } else {
+                ESP_LOGE(TAG, "Still bad...");
             }
-        }
     }
 }
 
@@ -77,10 +109,14 @@ esp_err_t init_adc(){
         .pattern_num = 1,
     };
 
+    adc_unit_t unit;
+    adc_channel_t channel;
+    adc_continuous_io_to_channel(35, &unit, &channel);
+
     adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX] = {0};
-    adc_pattern[0].atten = ADC_ATTEN_DB_0;
-    adc_pattern[0].channel = MICROPHONE_GPIO;
-    adc_pattern[0].unit = ADC_UNIT;
+    adc_pattern[0].atten = ADC_ATTEN_DB_11;
+    adc_pattern[0].channel = channel;
+    adc_pattern[0].unit = unit;
     adc_pattern[0].bit_width = ADC_BITWIDTH_12;
 
     dig_cfg.adc_pattern = adc_pattern;
@@ -93,7 +129,7 @@ esp_err_t init_adc(){
     };
     ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
 
-    xTaskCreatePinnedToCore(handler, "ADC loop", 10000, NULL, 2, &task_handle, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(handler, "ADC loop", 10000, NULL, 20, &task_handle, tskNO_AFFINITY);
     
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 

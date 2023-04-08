@@ -2,6 +2,7 @@
 #define UTILS__H
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/stream_buffer.h"
 
 inline TickType_t ms_to_ticks(uint32_t ms){ return (ms/portTICK_PERIOD_MS); }
 
@@ -15,30 +16,17 @@ inline uint8_t i2c_write_address(uint8_t address){
 
 static const float GRAVITY_CONST = 9.8f;
 
-/*
-inline float g_to_acceleration(float g){
-	return g * GRAVITY_CONST;
-}
+typedef struct {
+	float real, cplx;
+} Complex;
 
-void set_intr_type(gpio_config_t *conf, gpio_int_type_t val){
-	conf->intr_type = val;
-}
+typedef void (*job_callback)(void*, int);
 
-void set_mode(gpio_config_t *conf, gpio_mode_t val){
-	conf->mode = val;
-}
-
-void set_pin_bit_mask(gpio_config_t *conf, uint64_t val){
-	conf->pin_bit_mask = val;
-}
-
-void set_pull_down_en(gpio_config_t *conf, gpio_pulldown_t val){
-	conf->pull_down_en = val;
-}
-
-void set_pull_up_en(gpio_config_t *conf, gpio_pulldown_t val){
-	conf->pull_up_en = val;
-}
-*/
+typedef struct _FFTJob{
+	int nBuffers;					// Number of buffers
+	StreamBufferHandle_t *buffers;	// The buffers
+	int buffer_len;					// One buffer's length - Number of *Complex numbers* inside it
+	job_callback callback;			// Callback
+} FFTJob;
 
 #endif

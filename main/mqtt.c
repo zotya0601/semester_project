@@ -96,10 +96,18 @@ esp_err_t mqtt_start(){
 }
 
 esp_err_t mqtt_publish(uint8_t *data, int len){
-    return mqtt_publish_qos(data, len, 1);
+    return mqtt_publish_qos_topic(data, len, 1, mqtt_topic);
 }
 
 esp_err_t mqtt_publish_qos(uint8_t *data, int len, int qos){
+    return mqtt_publish_qos_topic(data, len, qos, mqtt_topic);
+}
+
+esp_err_t mqtt_publish_topic(uint8_t *data, int len, const char *topic) {
+    return mqtt_publish_qos_topic(data, len, 1, topic);
+}
+
+esp_err_t mqtt_publish_qos_topic(uint8_t *data, int len, int qosm const char *topic) {
     if(mqtt_client == NULL) return ESP_ERR_INVALID_STATE;
-    return esp_mqtt_client_enqueue(mqtt_client, mqtt_topic, (char*)data, len, 1, true, true);
+    return esp_mqtt_client_enqueue(mqtt_client, topic, (char*)data, len, 1, true, true);
 }

@@ -111,7 +111,7 @@ menu "Labwork Settings"
 
     endmenu
 
-    menu Microphone
+    menu "Microphone"
         choice MICROPHONE_GPIO
             prompt "ADC Pin"
             default ADC1_GPIO_33
@@ -133,19 +133,19 @@ menu "Labwork Settings"
 
         config READ_LEN
             int "Length of ADC conversion frame"
-            default 256
+            default 320
             help
                 "Length of ADC conversion frame in bytes. One conversion frame contains multiple conversion results"
         
         config ADC_BUFFER_SIZE
             int "Buffer length"
-            default 1024
+            default 1600
             help
                 "Length of DMA buffer to store measurements in"
         
         config SAMPLE_RATE
             int "Sample rate"
-            default 10000
+            default 20000
             help
                 "Sample rate of the ADC converter"
             

@@ -5,6 +5,9 @@
 #include "esp_err.h"
 #include "mpu6050.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 #define I2C_MASTER_SCL_IO           CONFIG_I2C_MASTER_SCL_IO      /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO           CONFIG_I2C_MASTER_SDA_IO      /*!< GPIO number used for I2C master data  */
 #define I2C_INT_PIN                 CONFIG_SENSOR_INT_INPUT
@@ -19,8 +22,16 @@
 
 #define TIMEOUT (I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS)
 
+TaskHandle_t i2c_handle;
+StreamBufferHandle_t MeasurementQueue_AxisX = NULL;
+StreamBufferHandle_t MeasurementQueue_AxisY = NULL;
+StreamBufferHandle_t MeasurementQueue_AxisZ = NULL;
+
+void i2c_reader_task(void *params);
+/*
 void init_mpu6050();
 esp_err_t read_acc_registers(float *res);
 esp_err_t read_acc_registers_structured(Measurements *m);
+*/
 
 #endif
