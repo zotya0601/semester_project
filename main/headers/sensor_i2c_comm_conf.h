@@ -22,10 +22,10 @@
 
 #define TIMEOUT (I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS)
 
-TaskHandle_t i2c_handle;
-StreamBufferHandle_t MeasurementQueue_AxisX = NULL;
-StreamBufferHandle_t MeasurementQueue_AxisY = NULL;
-StreamBufferHandle_t MeasurementQueue_AxisZ = NULL;
+extern TaskHandle_t i2c_handle;
+extern StreamBufferHandle_t MeasurementQueue_AxisX;
+extern StreamBufferHandle_t MeasurementQueue_AxisY;
+extern StreamBufferHandle_t MeasurementQueue_AxisZ;
 
 void i2c_reader_task(void *params);
 /*

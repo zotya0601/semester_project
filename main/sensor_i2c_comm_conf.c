@@ -13,6 +13,11 @@
 #include <string.h>
 #include <math.h>
 
+TaskHandle_t i2c_handle;
+StreamBufferHandle_t MeasurementQueue_AxisX;
+StreamBufferHandle_t MeasurementQueue_AxisY;
+StreamBufferHandle_t MeasurementQueue_AxisZ;
+
 static const uint8_t SAMPLE_RATE_DIVIDER[2] = 
 	{SAMPLE_RATE_DIVIDER_REG, SAMPLE_RATE_DIVIDER_1KHZ};	// Default: 0x00
 static const uint8_t FSYNC_DLPF_CONF[2] = 
@@ -100,7 +105,7 @@ static void fft_callback(void *res, int len){
 	int buf_len = len / 3;
 	Complex *x = fft_res + 0;
 	Complex *y = fft_res + buf_len;
-	Complex *z = fft_res = (buf_len * 2);
+	Complex *z = fft_res + (buf_len * 2);
 
 	float *data = (float*)malloc(len * sizeof(float));
 	for(int i = 0; i < buf_len; i+=3){
@@ -109,7 +114,7 @@ static void fft_callback(void *res, int len){
 		data[i + 2] = z[i].real;
 	}
 
-	mqtt_publish(data, len * sizeof(float));
+	mqtt_publish((uint8_t*)data, len * sizeof(float));
 	free(res);
 	free(data);
 }
@@ -179,7 +184,7 @@ void i2c_reader_task(void *params){
 					buffers[2] = MeasurementQueue_AxisZ;
 
 					FFTJob job = {
-						.buffer_len = 1024
+						.buffer_len = 1024,
 						.nBuffers = 3,
 						.buffers = buffers,
 						.callback = fft_callback

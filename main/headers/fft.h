@@ -14,10 +14,10 @@
     #define TASK_QUEUE_LENGTH 10
 #endif
 
-QueueHandle_t FFT_TaskQueue = NULL;
-bool fft_add_job_to_queue(FFTJob job);
+extern TaskHandle_t fft_handle;
+extern QueueHandle_t FFT_TaskQueue;
 
-TaskHandle_t fft_handle = 0;
+bool fft_add_job_to_queue(FFTJob job);
 void fft_task(void *params);
 
 #endif

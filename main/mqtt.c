@@ -107,7 +107,7 @@ esp_err_t mqtt_publish_topic(uint8_t *data, int len, const char *topic) {
     return mqtt_publish_qos_topic(data, len, 1, topic);
 }
 
-esp_err_t mqtt_publish_qos_topic(uint8_t *data, int len, int qosm const char *topic) {
+esp_err_t mqtt_publish_qos_topic(uint8_t *data, int len, int qosm, const char *topic) {
     if(mqtt_client == NULL) return ESP_ERR_INVALID_STATE;
     return esp_mqtt_client_enqueue(mqtt_client, topic, (char*)data, len, 1, true, true);
 }

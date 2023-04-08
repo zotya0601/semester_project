@@ -8,6 +8,9 @@
 
 #define READINGS 4096
 
+TaskHandle_t fft_handle;
+QueueHandle_t FFT_TaskQueue;
+
 bool fft_add_job_to_queue(FFTJob job){
 	BaseType_t res = xQueueSendToBack(FFT_TaskQueue, &job, portMAX_DELAY);
 	return (res == pdTRUE);
