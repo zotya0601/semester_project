@@ -63,7 +63,7 @@ void app_main(void)
 	mqtt_start();
 
 	BaseType_t taskc_res;
-	taskc_res = xTaskCreatePinnedToCore(fft_task, "FFT loop", 80000, &ucParameterToPass, 2, &fft_handle, tskNO_AFFINITY);
+	taskc_res = xTaskCreatePinnedToCore(fft_task, "FFT loop", 70000, &ucParameterToPass, 2, &fft_handle, tskNO_AFFINITY);
 	if(taskc_res != pdPASS){
 		ESP_LOGE("main", "Could not start task FFT loop");
 		return;
