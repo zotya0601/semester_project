@@ -53,7 +53,7 @@ void fft_task(void *params){
 			}
 
 			// Kapott komplex számok mennyiségének a fele, szorozva a bufferek számával -> Eredmény komplex számok
-			int final_len = (nComplex / 2) * job.nBuffers;
+			int final_len = (nComplex / 2);
 			for(int i = 0; i < final_len; i++){
 				res[i] = 10 * log10f((res[i * 2 + 0] * res[i * 2 + 0] + res[i * 2 + 1] * res[i * 2 + 1])/job.buffer_len);
 			}

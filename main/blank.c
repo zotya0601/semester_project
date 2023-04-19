@@ -62,18 +62,18 @@ void app_main(void)
 	mqtt_register_event_handler(mqtt_event_handler);
 	mqtt_start();
 
-	// init_adc();
-
 	BaseType_t taskc_res;
+	taskc_res = xTaskCreatePinnedToCore(fft_task, "FFT loop", 80000, &ucParameterToPass, 2, &fft_handle, tskNO_AFFINITY);
+	if(taskc_res != pdPASS){
+		ESP_LOGE("main", "Could not start task FFT loop");
+		return;
+	}
+	
 	taskc_res = xTaskCreatePinnedToCore(i2c_reader_task, "Acc.meter loop", 10000, &ucParameterToPass, 20, &i2c_handle, 1);
 	if(taskc_res != pdPASS){
 		ESP_LOGE("main", "Could not start task Accelerometer loop");
 		return;
 	}
 
-	taskc_res = xTaskCreatePinnedToCore(fft_task, "FFT loop", 80000, &ucParameterToPass, 2, &fft_handle, tskNO_AFFINITY);
-	if(taskc_res != pdPASS){
-		ESP_LOGE("main", "Could not start task FFT loop");
-		return;
-	}
+	// init_adc();
 }
