@@ -58,7 +58,7 @@
 void initialize_int_receiver(gpio_num_t gpio_pin);
 
 typedef struct _Measurements{
-    Complex x, y, z;
+    /*Complex*/ float x, y, z;
 } Measurements;
 
 #endif

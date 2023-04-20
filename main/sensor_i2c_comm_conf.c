@@ -85,10 +85,9 @@ static esp_err_t read_acc_registers_structured(Measurements *m){
 
 	int16_t *temp = (void*)(rev_byte_order);
 
-	m->x.real = ((float)temp[0]) / 4096;
-	m->y.real = ((float)temp[1]) / 4096;
-	m->z.real = ((float)temp[2]) / 4096;
-	m->x.cplx = m->y.cplx = m->z.cplx = 0;
+	m->x = ((float)temp[0]) / 4096;
+	m->y = ((float)temp[1]) / 4096;
+	m->z = ((float)temp[2]) / 4096;
 
 	return ESP_OK;
 }
@@ -101,17 +100,17 @@ static void IRAM_ATTR gpio_isr_handler(void* arg) {
 }
 
 static void fft_callback(void *res, int len){
-	Complex *fft_res = (Complex*)res;
+	float *fft_res = (float*)res;
 	int buf_len = len / 3;
-	Complex *x = fft_res + 0;
-	Complex *y = fft_res + buf_len;
-	Complex *z = fft_res + (buf_len * 2);
+	float *x = &(fft_res[0]);
+	float *y = &(fft_res[buf_len]);
+	float *z = &(fft_res[buf_len * 2]);
 
 	float *data = (float*)malloc(len * sizeof(float));
 	for(int i = 0; i < buf_len; i+=3){
-		data[i + 0] = x[i].real;
-		data[i + 1] = y[i].real;
-		data[i + 2] = z[i].real;
+		data[i + 0] = x[i];
+		data[i + 1] = y[i];
+		data[i + 2] = z[i];
 	}
 
 	mqtt_publish((uint8_t*)data, len * sizeof(float));
@@ -141,9 +140,9 @@ void i2c_reader_task(void *params){
 
 	static DRAM_ATTR int16_t queueLength = 0;
 	
-	MeasurementQueue_AxisX = xStreamBufferCreate(2048 * sizeof(Complex), 1024 * sizeof(Complex));
-	MeasurementQueue_AxisY = xStreamBufferCreate(2048 * sizeof(Complex), 1024 * sizeof(Complex));
-	MeasurementQueue_AxisZ = xStreamBufferCreate(2048 * sizeof(Complex), 1024 * sizeof(Complex));
+	MeasurementQueue_AxisX = xStreamBufferCreate(2048 * sizeof(float), 1024 * sizeof(float));
+	MeasurementQueue_AxisY = xStreamBufferCreate(2048 * sizeof(float), 1024 * sizeof(float));
+	MeasurementQueue_AxisZ = xStreamBufferCreate(2048 * sizeof(float), 1024 * sizeof(float));
 
 	int LED_state = 0;
 
@@ -162,15 +161,15 @@ void i2c_reader_task(void *params){
 			read_acc_registers_structured(&m);
 			
 			bool error_happened = false;
-			if( xStreamBufferSend(MeasurementQueue_AxisX, &(m.x), sizeof(Complex), portMAX_DELAY) == 0 ){
+			if( xStreamBufferSend(MeasurementQueue_AxisX, &(m.x), sizeof(float), portMAX_DELAY) == 0 ){
 				ESP_LOGE(I2C_TAG, "Buffer X is full");
 				error_happened = true;
 			}
-			if( xStreamBufferSend(MeasurementQueue_AxisY, &(m.y), sizeof(Complex), portMAX_DELAY) == 0 ){
+			if( xStreamBufferSend(MeasurementQueue_AxisY, &(m.y), sizeof(float), portMAX_DELAY) == 0 ){
 				ESP_LOGE(I2C_TAG, "Buffer Y is full");
 				error_happened = true;
 			}
-			if( xStreamBufferSend(MeasurementQueue_AxisZ, &(m.z), sizeof(Complex), portMAX_DELAY) == 0 ){
+			if( xStreamBufferSend(MeasurementQueue_AxisZ, &(m.z), sizeof(float), portMAX_DELAY) == 0 ){
 				ESP_LOGE(I2C_TAG, "Buffer Z is full");
 				error_happened = true;
 			}

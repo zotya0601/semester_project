@@ -34,25 +34,28 @@ void fft_task(void *params){
 				continue;
 			}
 
-			int nComplex = job.nBuffers * job.buffer_len;
-			float *res = (float*)malloc(nComplex * sizeof(Complex));
-			memset(res, 0, nComplex * sizeof(Complex));
+			int nComplex = job.nBuffers * job.buffer_len;				// Sum of data received
+			float *res = (float*)malloc(nComplex * sizeof(float) * 2);	// Allocating memory for complex numbers
+			memset(res, 0, nComplex * sizeof(float) * 2);				// Setting the allocated memory to 0
 
 			float *ptr = NULL;
 
 			for(int i = 0; i < job.nBuffers; i++){
-				xStreamBufferReceive(job.buffers[i], buffer, job.buffer_len * sizeof(Complex), portMAX_DELAY);
+				xStreamBufferReceive(job.buffers[i], buffer, job.buffer_len * sizeof(float), portMAX_DELAY);
 				
-				ptr = res + (i * job.buffer_len);
+				ptr = &(res[i * job.buffer_len]);
+				// Adatpontok elhelyezése komplex számoknak megfelelő módon
+				// [Re1, Im1, Re2, Im2, ...]
+				for(int i = 0; i < job.buffer_len; i++){
+					ptr[i * 2] = buffer[i];
+				}
 
-				dsps_fft2r_fc32(buffer, job.buffer_len);
-				dsps_bit_rev_fc32(buffer, job.buffer_len);	
-				dsps_cplx2reC_fc32(buffer, job.buffer_len);
-				
-				memcpy(ptr, buffer, job.buffer_len * sizeof(float));
+				dsps_fft2r_fc32(ptr, job.buffer_len);
+				dsps_bit_rev_fc32(ptr, job.buffer_len);	
+				dsps_cplx2reC_fc32(ptr, job.buffer_len);
 			}
 
-			// Kapott komplex számok mennyiségének a fele, szorozva a bufferek számával -> Eredmény komplex számok
+			// Kapott komplex számok mennyiségének a fele -> Eredmény komplex számok
 			int final_len = (nComplex / 2);
 			for(int i = 0; i < final_len; i++){
 				res[i] = 10 * log10f((res[i * 2 + 0] * res[i * 2 + 0] + res[i * 2 + 1] * res[i * 2 + 1])/job.buffer_len);

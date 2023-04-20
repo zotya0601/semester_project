@@ -16,9 +16,9 @@ inline uint8_t i2c_write_address(uint8_t address){
 
 static const float GRAVITY_CONST = 9.8f;
 
-typedef struct {
-	float real, cplx;
-} Complex;
+// typedef struct {
+// 	float real, cplx;
+// } Complex;
 
 typedef void (*job_callback)(void*, int);
 

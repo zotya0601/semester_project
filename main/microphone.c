@@ -30,7 +30,7 @@ static TaskHandle_t task_handle = NULL;
 static adc_continuous_handle_t adc_handle = NULL;
 
 static void fft_mqtt_callback(void *data, int len){
-    mqtt_publish(data, len * sizeof(Complex));
+    mqtt_publish(data, len * sizeof(float));
     free(data);
 }
 
@@ -39,30 +39,26 @@ static StreamBufferHandle_t data_sbuf;
 static void IRAM_ATTR handler(void *params){
     static const char *TAG = "ADC Handler method";
     static uint32_t ret_num = 0;
-    // DMA_ATTR uint8_t result[ADC_READ_LEN] = {0};
     
-    DMA_ATTR static Complex data_arr[ADC_READ_LEN] = {0};
-    Complex *middle = data_arr + (ADC_READ_LEN / 2);
+    static uint8_t result[ADC_READ_LEN] = {0};
 
     while(1){
         ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
         char unit[] = EXAMPLE_ADC_UNIT_STR(EXAMPLE_ADC_UNIT);
 
         ESP_LOGI(TAG, "Hanling ADC data");  
-            esp_err_t ret = adc_continuous_read(adc_handle, (uint8_t*)middle, ADC_READ_LEN, &ret_num, 0);
+            esp_err_t ret = adc_continuous_read(adc_handle, result, ADC_READ_LEN, &ret_num, 0);
             if(ret == ESP_OK){
                 ESP_LOGI("TASK", "ret is %x, ret_num is %"PRIu32, ret, ret_num);
                 
-                Complex *data_ptr = data_arr;
                 for (int i = 0; i < ret_num; i += SOC_ADC_DIGI_RESULT_BYTES) {
-                    adc_digi_output_data_t *p = (void*)&middle[i];
+                    adc_digi_output_data_t *p = (void*)&result[i];
                     uint32_t chan_num = EXAMPLE_ADC_GET_CHANNEL(p);
                     uint32_t data = EXAMPLE_ADC_GET_DATA(p);
 
-                    Complex d = {0};
-                    d.real = (float)(data & 0x00000fff);
-                    *data_ptr = d;
-                    data_ptr++;
+                    data = (data & 0x00000fff);
+                    float f_data = (float)data;
+                    xStreamBufferSend(data_sbuf, &f_data, sizeof(float), portMAX_DELAY);
                     
                     continue;
 
@@ -75,7 +71,7 @@ static void IRAM_ATTR handler(void *params){
                 }
                 ESP_LOGI(TAG, "Measurements done");
 
-                xStreamBufferSend(data_sbuf, data_arr, ADC_READ_LEN * sizeof(Complex), portMAX_DELAY);
+                // xStreamBufferSend(data_sbuf, data_arr, ADC_READ_LEN * sizeof(float), portMAX_DELAY);
                 StreamBufferHandle_t *handle = (StreamBufferHandle_t*)malloc(sizeof(StreamBufferHandle_t));
                 FFTJob job = {
                     .nBuffers = 1,
@@ -131,7 +127,7 @@ esp_err_t init_adc(){
     ESP_ERROR_CHECK(adc_continuous_config(handle, &dig_cfg));
 
     adc_handle = handle;
-    data_sbuf = xStreamBufferCreate(ADC_BUFFER_SIZE * sizeof(Complex), ADC_READ_LEN * sizeof(Complex));
+    data_sbuf = xStreamBufferCreate(ADC_BUFFER_SIZE * sizeof(float), ADC_READ_LEN * sizeof(float));
 
     adc_continuous_evt_cbs_t cbs = {
         .on_conv_done = s_conv_done_cb,
