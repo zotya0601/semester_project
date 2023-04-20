@@ -35,24 +35,26 @@ void fft_task(void *params){
 			}
 
 			int nComplex = job.nBuffers * job.buffer_len;				// Sum of data received
-			float *res = (float*)malloc(nComplex * sizeof(float) * 2);	// Allocating memory for complex numbers
-			memset(res, 0, nComplex * sizeof(float) * 2);				// Setting the allocated memory to 0
-
-			float *ptr = NULL;
+			int res_idx = 0;
+			// float *res = (float*)calloc(nComplex * 2, sizeof(float));	// Allocating memory for complex numbers
+			float *res = buffer;
 
 			for(int i = 0; i < job.nBuffers; i++){
-				xStreamBufferReceive(job.buffers[i], buffer, job.buffer_len * sizeof(float), portMAX_DELAY);
+				xStreamBufferReceive(job.buffers[i], (void*)&(res[res_idx]), job.buffer_len * sizeof(float), portMAX_DELAY);
 				
-				ptr = &(res[i * job.buffer_len]);
 				// Adatpontok elhelyezése komplex számoknak megfelelő módon
 				// [Re1, Im1, Re2, Im2, ...]
-				for(int i = 0; i < job.buffer_len; i++){
-					ptr[i * 2] = buffer[i];
+				for(int j = 0; j < job.buffer_len; j++){
+					res[res_idx + (j * 2)] = buffer[j];	
 				}
 
+				float *ptr = &(res[res_idx]);
+				
 				dsps_fft2r_fc32(ptr, job.buffer_len);
 				dsps_bit_rev_fc32(ptr, job.buffer_len);	
 				dsps_cplx2reC_fc32(ptr, job.buffer_len);
+				
+				res_idx += job.buffer_len * 2;
 			}
 
 			// Kapott komplex számok mennyiségének a fele -> Eredmény komplex számok

@@ -100,21 +100,19 @@ static void IRAM_ATTR gpio_isr_handler(void* arg) {
 }
 
 static void fft_callback(void *res, int len){
-	float *fft_res = (float*)res;
+	float *fft_res = res;
 	int buf_len = len / 3;
-	float *x = &(fft_res[0]);
-	float *y = &(fft_res[buf_len]);
-	float *z = &(fft_res[buf_len * 2]);
 
 	float *data = (float*)malloc(len * sizeof(float));
 	for(int i = 0; i < buf_len; i+=3){
-		data[i + 0] = x[i];
-		data[i + 1] = y[i];
-		data[i + 2] = z[i];
+		data[i + 0] = fft_res[i];
+		data[i + 1] = fft_res[i + buf_len];
+		data[i + 2] = fft_res[i + (buf_len * 2)];
 	}
 
-	mqtt_publish((uint8_t*)data, len * sizeof(float));
-	free(res);
+	ESP_LOGI("I2C_FFT_HANDLER", "Length I've got is %d, which means %d bytes", len, (len * sizeof(float)));
+	mqtt_publish(data, len * sizeof(float));
+	// free(res);
 	free(data);
 }
 

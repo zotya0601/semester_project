@@ -69,7 +69,7 @@ void app_main(void)
 		return;
 	}
 	
-	taskc_res = xTaskCreatePinnedToCore(i2c_reader_task, "Acc.meter loop", 10000, &ucParameterToPass, 20, &i2c_handle, 1);
+	taskc_res = xTaskCreatePinnedToCore(i2c_reader_task, "Acc.meter loop", 9000, &ucParameterToPass, 20, &i2c_handle, 1);
 	if(taskc_res != pdPASS){
 		ESP_LOGE("main", "Could not start task Accelerometer loop");
 		return;
